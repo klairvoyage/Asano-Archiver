@@ -4,6 +4,7 @@ const axios = require('axios');
 const https = require('https');
 const fs = require('fs');
 const path = require('path');
+const os = require('os');
 const Bottleneck = require('bottleneck');
 const cheerio = require('cheerio');
 const app = express();
@@ -12,10 +13,11 @@ const app = express();
 app.use(express.static('public'));
 app.use(express.json());
 
-// Create a directory for downloads if it doesn't exist
-const downloadDir = path.join(__dirname, 'downloads');
+// Create a directory named HWFWM in the default download directory
+const downloadDir = path.join(os.homedir(), 'Downloads', 'HWFWM Chapters');
 if (!fs.existsSync(downloadDir)) {
-  fs.mkdirSync(downloadDir);
+  fs.mkdirSync(downloadDir, { recursive: true });
+  console.log(`Created directory: ${downloadDir}`);
 }
 
 // Browser impersonation headers
