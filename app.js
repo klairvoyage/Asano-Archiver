@@ -51,7 +51,9 @@ app.get('/api/posts', async (req, res) => {
     const service = 'patreon';
     const offset = parseInt(req.query.offset) || 0;
     
-    const url = `https://kemono.su/api/v1/${service}/user/${creatorId}/post?o=${offset}&limit=50`;
+    // Use the updated API endpoint format
+    const url = `https://kemono.su/api/v1/${service}/user/${creatorId}/posts-legacy?o=${offset}&limit=50`;
+    console.log(`Fetching from: ${url}`);
     
     // Use the rate limiter to make the request
     const response = await apiLimiter.schedule(() => axios.get(url, { 
@@ -73,10 +75,43 @@ app.get('/api/post/:id', async (req, res) => {
     const service = 'patreon';
     const postId = req.params.id;
     
-    const url = `https://kemono.su/${service}/user/${creatorId}/post/${postId}`;
-    
+    // First try the API endpoint
+    const apiUrl = `https://kemono.su/api/v1/${service}/user/${creatorId}/post/${postId}`;
+
+    try {
+      // Try the API first
+      const apiResponse = await apiLimiter.schedule(() => axios.get(apiUrl, {
+        headers: HEADERS,
+        httpsAgent: new https.Agent({ keepAlive: true })
+      }));
+
+      // If we got data via API, format and return it
+      if (apiResponse.data) {
+        // Format according to what your frontend expects
+        const files = (apiResponse.data.attachments || [])
+          .filter(attachment => attachment.name.toLowerCase().endsWith('.pdf'))
+          .map(attachment => ({
+            name: attachment.name,
+            url: `https://kemono.su/data/${attachment.path}`
+          }));
+
+        res.json({
+          id: postId,
+          title: apiResponse.data.title || '',
+          content: apiResponse.data.content || '',
+          files
+        });
+        return;
+      }
+    } catch (apiError) {
+      console.log('API endpoint failed, falling back to HTML scraping');
+    }
+
+    // Fallback to HTML scraping if API failed
+    const htmlUrl = `https://kemono.su/${service}/user/${creatorId}/post/${postId}`;
+
     // Use the rate limiter to make the request
-    const response = await apiLimiter.schedule(() => axios.get(url, { 
+    const response = await apiLimiter.schedule(() => axios.get(htmlUrl, {
       headers: HEADERS,
       httpsAgent: new https.Agent({ keepAlive: true })
     }));
