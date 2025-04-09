@@ -1,7 +1,7 @@
 {
-  "name": "kemono-pdf-downloader",
+  "name": "Asano-Archiver",
   "version": "1.0.0",
-  "description": "Application to download PDFs from Kemono.su",
+  "description": "Application to Download PDFs from Kemono.su for user 22614979 (Shirtaloon)",
   "main": "app.js",
   "scripts": {
     "start": "node app.js",
@@ -16,6 +16,6 @@
   "devDependencies": {
     "nodemon": "^3.1.9"
   },
-  "author": "",
+  "author": "klairvoyage",
   "license": "MIT"
 }
