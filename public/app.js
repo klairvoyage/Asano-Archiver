@@ -122,40 +122,41 @@ document.addEventListener('DOMContentLoaded', () => {
     if (offset === 0) {
       postList.innerHTML = '';
     }
-    
+
     posts.forEach(post => {
       // Check if this post is already rendered
       if (document.querySelector(`.post-item[data-id="${post.id}"]`)) {
         return;
       }
-      
-      const postDate = new Date(post.added * 1000).toLocaleDateString();
+
+      // Convert the published timestamp to a readable date
+      const postDate = new Date(post.published).toLocaleDateString();
       const postElement = document.createElement('div');
       postElement.className = 'post-item';
       postElement.dataset.id = post.id;
-      
+
       // Add selected class if this post is in our selected set
       if (selectedPosts.has(post.id)) {
         postElement.classList.add('selected');
       }
-      
+
       postElement.innerHTML = `
         <div class="post-title">${post.title || 'Untitled Post'}</div>
         <div class="post-date">${postDate}</div>
       `;
-      
+
       postElement.addEventListener('click', () => {
         postElement.classList.toggle('selected');
-        
+
         if (postElement.classList.contains('selected')) {
           selectedPosts.add(post.id);
         } else {
           selectedPosts.delete(post.id);
         }
-        
+
         updateSelectedCount();
       });
-      
+
       postList.appendChild(postElement);
     });
   }
