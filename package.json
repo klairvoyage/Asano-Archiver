@@ -1,0 +1,21 @@
+{
+  "name": "kemono-pdf-downloader",
+  "version": "1.0.0",
+  "description": "Application to download PDFs from Kemono.su",
+  "main": "app.js",
+  "scripts": {
+    "start": "node app.js",
+    "dev": "nodemon app.js"
+  },
+  "dependencies": {
+    "axios": "^1.4.0",
+    "bottleneck": "^2.19.5",
+    "cheerio": "^1.0.0-rc.12",
+    "express": "^4.18.2"
+  },
+  "devDependencies": {
+    "nodemon": "^2.0.22"
+  },
+  "author": "",
+  "license": "MIT"
+}
