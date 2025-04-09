@@ -333,19 +333,15 @@ document.addEventListener('DOMContentLoaded', () => {
         statusElement.className = 'progress-item alert alert-success';
         statusElement.innerHTML = `
           <div class="d-flex justify-content-between align-items-center">
-            <div>${filename} downloaded successfully</div>
-            <a href="/downloads/${result.path}" class="btn btn-sm btn-outline-primary" download>Download</a>
+            <div class="d-flex align-items-center">
+              <button class="btn btn-sm btn-close me-2" aria-label="Close" onclick="this.closest('.alert').remove()"></button>
+              <div>${filename} downloaded successfully</div>
+            </div>
+            <div>
+              <a href="/downloads/${result.path}" class="btn btn-sm btn-outline-primary" target="_blank">Open</a>
+            </div>
           </div>
         `;
-        
-        // Add to downloaded files list
-        const fileItem = document.createElement('li');
-        fileItem.className = 'list-group-item d-flex justify-content-between align-items-center';
-        fileItem.innerHTML = `
-          ${filename}
-          <a href="/downloads/${result.path}" class="btn btn-sm btn-outline-primary" download>Download</a>
-        `;
-        downloadedFiles.appendChild(fileItem);
         
         return result;
       } else {
