@@ -80,36 +80,83 @@ app.get('/api/post/:id', async (req, res) => {
     const service = 'patreon';
     const postId = req.params.id;
     
-    // First try using the post endpoint
-    const url = `https://kemono.su/${service}/user/${creatorId}/post/${postId}`;
+    // First try the data from posts-legacy endpoint
+    const url = `https://kemono.su/api/v1/${service}/user/${creatorId}/post/${postId}`;
+    console.log(`Fetching post details from: ${url}`);
 
-    // Use the rate limiter to make the request
     const response = await apiLimiter.schedule(() => axios.get(url, {
       headers: HEADERS,
       httpsAgent: new https.Agent({ keepAlive: true })
     }));
-    
-    const $ = cheerio.load(response.data);
-    const files = [];
-    
-    // Extract file information using cheerio
-    $('.post__attachment').each((i, el) => {
-      const link = $(el).find('a').attr('href');
-      const name = $(el).find('a').text().trim();
-      if (link && name.toLowerCase().endsWith('.pdf')) {
-        files.push({
-          name,
-          url: link.startsWith('http') ? link : `https://kemono.su${link}`
+
+    // Check if we got the post data
+    if (response.data) {
+      const files = [];
+
+      // Extract PDF files from attachments
+      if (response.data.attachments && Array.isArray(response.data.attachments)) {
+        response.data.attachments.forEach(attachment => {
+          if (attachment.name && attachment.name.toLowerCase().endsWith('.pdf')) {
+            const server = "https://kemono.su"; // Default server
+            files.push({
+              name: attachment.name,
+              url: `${server}/data${attachment.path}`
+            });
+          }
         });
       }
-    });
-    
-    res.json({ 
-      id: postId,
-      title: $('.post__title').text().trim(),
-      content: $('.post__content').html(),
-      files
-    });
+
+      // If no files found through direct API, try checking the result_attachments in case data structure is different
+      if (files.length === 0 && response.data.result_attachments && Array.isArray(response.data.result_attachments)) {
+        response.data.result_attachments.forEach(attachment => {
+          if (attachment.name && attachment.name.toLowerCase().endsWith('.pdf')) {
+            const server = attachment.server || "https://kemono.su";
+            files.push({
+              name: attachment.name,
+              url: `${server}${attachment.path.startsWith('/') ? '' : '/'}${attachment.path}`
+            });
+          }
+        });
+      }
+
+      // If still no files found, fall back to HTML scraping
+      if (files.length === 0) {
+        console.log('No PDF attachments found in API response, falling back to HTML scraping');
+
+        // Get the HTML page for scraping
+        const htmlUrl = `https://kemono.su/${service}/user/${creatorId}/post/${postId}`;
+        const htmlResponse = await apiLimiter.schedule(() => axios.get(htmlUrl, {
+          headers: HEADERS,
+          httpsAgent: new https.Agent({ keepAlive: true })
+        }));
+
+        const $ = cheerio.load(htmlResponse.data);
+
+        // Extract file information using cheerio
+        $('.post__attachment').each((i, el) => {
+          const link = $(el).find('a').attr('href');
+          const name = $(el).find('a').text().trim();
+          if (link && name.toLowerCase().endsWith('.pdf')) {
+            files.push({
+              name,
+              url: link.startsWith('http') ? link : `https://kemono.su${link}`
+            });
+          }
+        });
+      }
+
+      // Log the found files for debugging
+      console.log(`Found ${files.length} PDF files for post ${postId}:`, files);
+
+      res.json({
+        id: postId,
+        title: response.data.title || 'Untitled Post',
+        content: response.data.content || '',
+        files
+      });
+    } else {
+      throw new Error('Invalid response from API');
+    }
   } catch (error) {
     console.error(`Error fetching post ${req.params.id}:`, error.message);
     res.status(500).json({ error: 'Failed to fetch post details' });
@@ -125,26 +172,35 @@ app.post('/api/download', async (req, res) => {
   }
   
   try {
+    console.log(`Attempting to download from URL: ${url}`);
+
     // Sanitize filename to prevent directory traversal
     const sanitizedFilename = path.basename(filename);
     const fullPath = path.join(downloadDir, sanitizedFilename);
-    
+
     // Check if file already exists
     if (fs.existsSync(fullPath)) {
       return res.json({ success: true, message: 'File already exists', path: sanitizedFilename });
     }
-    
+
     // Schedule download with rate limiting
     await downloadLimiter.schedule(async () => {
       // Create a write stream
       const writer = fs.createWriteStream(fullPath);
-      
+
+      // Add additional headers for PDF download
+      const downloadHeaders = {
+        ...HEADERS,
+        'Accept': 'application/pdf,*/*',
+        'Referer': 'https://kemono.su/'
+      };
+
       // Download the file with proper headers
       const response = await axios({
         method: 'GET',
         url: url,
         responseType: 'stream',
-        headers: HEADERS,
+        headers: downloadHeaders,
         httpsAgent: new https.Agent({ keepAlive: true })
       });
       
