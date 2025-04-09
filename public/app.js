@@ -237,69 +237,103 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
     
+    // Reset the queue and processing state
     downloadQueue = [...availablePdfs];
-    downloadProgress.innerHTML = `
-      <div class="alert alert-info">
-        <div class="d-flex align-items-center">
-          <div class="loading"></div>
-          <div>Starting downloads...</div>
+    isProcessing = true;
+
+    // Clear previous progress
+    downloadProgress.innerHTML = '';
+
+    // Create progress container
+    const progressContainer = document.createElement('div');
+    progressContainer.className = 'alert alert-info';
+    progressContainer.innerHTML = `
+      <div class="d-flex align-items-center">
+        <div class="loading"></div>
+        <div>Starting downloads...</div>
+      </div>
+      <div class="mt-2">
+        <div class="progress">
+          <div class="progress-bar" role="progressbar" style="width: 0%"></div>
         </div>
-        <div class="mt-2">
-          <div class="progress">
-            <div class="progress-bar" role="progressbar" style="width: 0%"></div>
-          </div>
-          <div class="text-center mt-1">0/${downloadQueue.length}</div>
-        </div>
+        <div class="text-center mt-1 progress-text">0/${downloadQueue.length}</div>
       </div>
     `;
-    
+    downloadProgress.appendChild(progressContainer);
+
+    // Additional tracking variables
+    window.totalDownloads = downloadQueue.length;
+
+    // Start processing queue
     processDownloadQueue();
   }
 
   // Process download queue with rate limiting
   async function processDownloadQueue() {
     if (downloadQueue.length === 0) {
-      downloadProgress.innerHTML = `
-        <div class="alert alert-success">
-          All downloads completed successfully!
+      // Ensure final progress update
+      const progressBar = document.querySelector('.progress-bar');
+      const progressText = document.querySelector('.progress-text');
+
+      if (progressBar) progressBar.style.width = '100%';
+      if (progressText) progressText.textContent = `${window.totalDownloads}/${window.totalDownloads}`;
+
+      // All downloads completed
+      const successAlert = document.createElement('div');
+      successAlert.className = 'alert alert-success mt-2';
+      successAlert.innerHTML = `
+        <div class="d-flex justify-content-between align-items-center">
+          <div class="d-flex align-items-center">
+            <button class="btn btn-sm btn-close me-2" aria-label="Close" onclick="this.closest('.alert').remove()"></button>
+            <div>All downloads completed successfully!</div>
+          </div>
         </div>
       `;
+      downloadProgress.appendChild(successAlert);
+
       isProcessing = false;
       return;
     }
-    
-    isProcessing = true;
-    const pdf = downloadQueue.shift();
+
     const progressBar = document.querySelector('.progress-bar');
-    const progressText = document.querySelector('.progress .text-center');
-    const completedCount = availablePdfs.length - downloadQueue.length;
-    const percentage = Math.round((completedCount / availablePdfs.length) * 100);
-    
-    progressBar.style.width = `${percentage}%`;
-    progressText.textContent = `${completedCount}/${availablePdfs.length}`;
-    
-    // Update status message
-    document.querySelector('.alert-info div:not(.loading)').textContent = `Downloading: ${pdf.name}`;
-    
+    const progressText = document.querySelector('.progress-text');
+    const infoText = document.querySelector('.alert-info div:not(.loading)');
+
+    const pdf = downloadQueue.shift();
+
+    // Update progress
+    if (progressBar) {
+      const percentage = Math.round(((window.totalDownloads - downloadQueue.length) / window.totalDownloads) * 100);
+      progressBar.style.width = `${percentage}%`;
+    }
+    if (progressText) {
+      progressText.textContent = `${window.totalDownloads - downloadQueue.length}/${window.totalDownloads}`;
+    }
+    if (infoText) infoText.textContent = `Downloading: ${pdf.name}`;
+
     try {
       await downloadFile(pdf.url, pdf.name);
-      
-      // Wait 5 seconds between downloads to avoid rate limiting
-      setTimeout(() => {
-        processDownloadQueue();
-      }, 5000);
+
+      // Short delay between downloads
+      await new Promise(resolve => setTimeout(resolve, 5000));
+
+      // Continue to next download
+      processDownloadQueue();
     } catch (error) {
       console.error('Download error:', error);
-      downloadProgress.innerHTML += `
-        <div class="alert alert-danger">
-          Error downloading ${pdf.name}: ${error.message}
-        </div>
+
+      // Create error alert
+      const errorAlert = document.createElement('div');
+      errorAlert.className = 'alert alert-danger mt-2';
+      errorAlert.innerHTML = `
+        Error downloading ${pdf.name}: ${error.message || 'Unknown error'}
+        <button class="btn btn-sm btn-close float-end" aria-label="Close" onclick="this.closest('.alert').remove()"></button>
       `;
-      
-      // Continue with next file despite error
-      setTimeout(() => {
-        processDownloadQueue();
-      }, 5000);
+      downloadProgress.appendChild(errorAlert);
+
+      // Short delay, then continue to next download
+      await new Promise(resolve => setTimeout(resolve, 5000));
+      processDownloadQueue();
     }
   }
 
@@ -308,15 +342,17 @@ document.addEventListener('DOMContentLoaded', () => {
     try {
       // Add a status item for this download
       const statusId = 'status-' + Date.now();
-      downloadProgress.innerHTML += `
-        <div id="${statusId}" class="progress-item alert alert-info">
-          <div class="d-flex align-items-center">
-            <div class="loading"></div>
-            <div>Downloading ${filename}...</div>
-          </div>
+      const statusElement = document.createElement('div');
+      statusElement.id = statusId;
+      statusElement.className = 'progress-item alert alert-info';
+      statusElement.innerHTML = `
+        <div class="d-flex align-items-center">
+          <div class="loading"></div>
+          <div>Downloading ${filename}...</div>
         </div>
       `;
-      
+      downloadProgress.appendChild(statusElement);
+
       const response = await fetch('/api/download', {
         method: 'POST',
         headers: {
@@ -324,12 +360,11 @@ document.addEventListener('DOMContentLoaded', () => {
         },
         body: JSON.stringify({ url, filename })
       });
-      
+
       const result = await response.json();
-      
+
       if (result.success) {
         // Update status
-        const statusElement = document.getElementById(statusId);
         statusElement.className = 'progress-item alert alert-success';
         statusElement.innerHTML = `
           <div class="d-flex justify-content-between align-items-center">
@@ -342,18 +377,23 @@ document.addEventListener('DOMContentLoaded', () => {
             </div>
           </div>
         `;
-        
+
         return result;
       } else {
         throw new Error(result.error || 'Unknown error');
       }
     } catch (error) {
       console.error('Error downloading file:', error);
+
       const statusElement = document.getElementById(statusId);
       if (statusElement) {
         statusElement.className = 'progress-item alert alert-danger';
-        statusElement.innerHTML = `Failed to download ${filename}: ${error.message}`;
+        statusElement.innerHTML = `
+          Failed to download ${filename}: ${error.message}
+          <button class="btn btn-sm btn-close float-end" aria-label="Close" onclick="this.closest('.alert').remove()"></button>
+        `;
       }
+
       throw error;
     }
   }
